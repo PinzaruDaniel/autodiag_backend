@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import os
 from typing import Annotated
 from uuid import uuid4
 
@@ -12,11 +13,14 @@ app = FastAPI(title="AutoDiag Backend")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-JWT_SECRET = "change-this-secret-in-production"
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable must be set")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+# In-memory stores for demo/minimal setup only.
 users: dict[str, dict[str, str]] = {}
 refresh_tokens: dict[str, str] = {}
 
@@ -135,8 +139,9 @@ def refresh_token(data: RefreshRequest) -> TokenPair:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
+    new_tokens = _build_token_pair(email)
     del refresh_tokens[token_id]
-    return _build_token_pair(email)
+    return new_tokens
 
 
 @app.post("/audio/send")

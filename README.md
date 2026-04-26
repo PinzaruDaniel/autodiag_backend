@@ -12,8 +12,11 @@ Minimal FastAPI backend for a mobile app with:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+export JWT_SECRET="replace-with-a-strong-secret"
 uvicorn app.main:app --reload
 ```
+
+> Note: this base backend uses in-memory storage for users and refresh tokens. Data is reset when the server restarts.
 
 ## Endpoints
 
