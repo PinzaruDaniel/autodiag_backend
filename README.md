@@ -35,4 +35,5 @@ uvicorn app.main:app --reload
 - `POST /audio/send`
   - Auth: `Authorization: Bearer <access_token>`
   - Multipart form-data field: `audio` (file)
+  - Accepts `audio/*` content types up to 10 MB.
   - Returns upload confirmation.

@@ -19,6 +19,7 @@ if not JWT_SECRET:
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024
 
 # In-memory stores for demo/minimal setup only.
 users: dict[str, dict[str, str]] = {}
@@ -138,6 +139,10 @@ def refresh_token(data: RefreshRequest) -> TokenPair:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
+    if not email or email not in users:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        )
 
     del refresh_tokens[token_id]
     return _build_token_pair(email)
@@ -152,9 +157,24 @@ async def send_audio(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="No filename provided"
         )
+    if not audio.content_type or not audio.content_type.startswith("audio/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be audio"
+        )
 
-    content = await audio.read()
-    if not content:
+    total_size = 0
+    while True:
+        chunk = await audio.read(1024 * 1024)
+        if not chunk:
+            break
+        total_size += len(chunk)
+        if total_size > MAX_AUDIO_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Audio file too large",
+            )
+
+    if total_size == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Empty audio file"
         )
@@ -162,6 +182,6 @@ async def send_audio(
     return {
         "message": "Audio received",
         "filename": audio.filename,
-        "size_bytes": str(len(content)),
+        "size_bytes": str(total_size),
         "uploaded_by": user["email"],
     }
