@@ -19,9 +19,10 @@ if not JWT_SECRET:
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
-MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024
+MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit for uploaded audio files.
 
-# In-memory stores for demo/minimal setup only.
+# WARNING: In-memory stores are for demo/minimal setup only (not production-safe).
+# Data resets on process restart and cannot be shared across multiple instances.
 users: dict[str, dict[str, str]] = {}
 refresh_tokens: dict[str, str] = {}
 
