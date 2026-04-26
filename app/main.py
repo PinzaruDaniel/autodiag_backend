@@ -19,7 +19,9 @@ if not JWT_SECRET:
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 7
-MAX_AUDIO_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB limit for uploaded audio files.
+MB_IN_BYTES = 1024 * 1024
+CHUNK_SIZE_BYTES = MB_IN_BYTES
+MAX_AUDIO_SIZE_BYTES = 10 * MB_IN_BYTES  # 10 MB limit for uploaded audio files.
 
 # WARNING: In-memory stores are for demo/minimal setup only (not production-safe).
 # Data resets on process restart and cannot be shared across multiple instances.
@@ -165,7 +167,7 @@ async def send_audio(
 
     total_size = 0
     while True:
-        chunk = await audio.read(1024 * 1024)
+        chunk = await audio.read(CHUNK_SIZE_BYTES)
         if not chunk:
             break
         total_size += len(chunk)
