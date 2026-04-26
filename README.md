@@ -5,6 +5,8 @@ Minimal FastAPI backend for a mobile app with:
 - login
 - refresh token
 - send audio endpoint
+- modular project structure
+- Azure upload with local fallback
 
 ## Setup
 
@@ -13,6 +15,10 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 export JWT_SECRET="replace-with-a-strong-secret"
+export AZURE_STORAGE_CONNECTION_STRING="<azure-blob-connection-string>"
+export AZURE_STORAGE_CONTAINER="audio"
+# optional local fallback folder (default: data/audio)
+export LOCAL_AUDIO_DIR="data/audio"
 uvicorn app.main:app --reload
 ```
 
@@ -36,4 +42,13 @@ uvicorn app.main:app --reload
   - Auth: `Authorization: Bearer <access_token>`
   - Multipart form-data field: `audio` (file)
   - Accepts `audio/*` content types up to 10 MB.
-  - Returns upload confirmation.
+  - Tries Azure Blob Storage first (if configured), otherwise saves locally.
+  - Returns upload confirmation with storage backend and location.
+
+## Project structure
+
+- `app/routes/` - API routers
+- `app/services/` - business logic (auth + audio storage)
+- `app/models/` - request/response models
+- `app/repositories/` - in-memory data store
+- `app/core/` - app configuration
