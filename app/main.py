@@ -139,9 +139,8 @@ def refresh_token(data: RefreshRequest) -> TokenPair:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
-    new_tokens = _build_token_pair(email)
     del refresh_tokens[token_id]
-    return new_tokens
+    return _build_token_pair(email)
 
 
 @app.post("/audio/send")
@@ -163,5 +162,6 @@ async def send_audio(
     return {
         "message": "Audio received",
         "filename": audio.filename,
+        "size_bytes": str(len(content)),
         "uploaded_by": user["email"],
     }
