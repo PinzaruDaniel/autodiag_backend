@@ -1,7 +1,10 @@
+import logging
 from pathlib import Path
 from uuid import uuid4
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 try:
     from azure.storage.blob import BlobServiceClient, ContentSettings
@@ -57,6 +60,7 @@ class AudioStorageService:
                 f"{blob_name}"
             )
         except Exception:
+            logger.exception("Azure upload failed; falling back to local storage.")
             return None
 
     def _store_locally(self, *, safe_filename: str, content: bytes) -> str:
