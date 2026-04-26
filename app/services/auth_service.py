@@ -9,7 +9,12 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.config import get_settings
 from app.models.auth import AuthRequest, RefreshRequest, TokenPair
-from app.repositories.in_memory import refresh_tokens, users
+from app.repositories.in_memory import (
+    refresh_tokens,
+    refresh_tokens_lock,
+    users,
+    users_lock,
+)
 
 
 class AuthService:
@@ -18,15 +23,16 @@ class AuthService:
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
     def register(self, data: AuthRequest) -> TokenPair:
-        if data.email in users:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
-            )
+        with users_lock:
+            if data.email in users:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
+                )
 
-        users[data.email] = {
-            "email": data.email,
-            "password_hash": generate_password_hash(data.password),
-        }
+            users[data.email] = {
+                "email": data.email,
+                "password_hash": generate_password_hash(data.password),
+            }
         return self._build_token_pair(data.email)
 
     def login(self, data: AuthRequest) -> TokenPair:
@@ -46,16 +52,24 @@ class AuthService:
 
         token_id = payload.get("jti")
         email = payload.get("sub")
-        if not token_id or refresh_tokens.get(token_id) != email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-            )
-        if not email or email not in users:
+        with refresh_tokens_lock:
+            token_owner = refresh_tokens.get(token_id or "")
+            if not token_id or token_owner != email:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token",
+                )
+            del refresh_tokens[token_id]
+
+        if not email:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
             )
-
-        del refresh_tokens[token_id]
+        with users_lock:
+            if email not in users:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+                )
         return self._build_token_pair(email)
 
     def get_current_user(self, token: str) -> dict[str, str]:
@@ -102,7 +116,8 @@ class AuthService:
         token = jwt.encode(
             payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm
         )
-        refresh_tokens[token_id] = email
+        with refresh_tokens_lock:
+            refresh_tokens[token_id] = email
         return token
 
     def _decode_token(self, token: str) -> dict[str, Any]:
