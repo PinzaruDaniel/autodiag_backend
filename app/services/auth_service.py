@@ -36,7 +36,8 @@ class AuthService:
         return self._build_token_pair(data.email)
 
     def login(self, data: AuthRequest) -> TokenPair:
-        user = users.get(data.email)
+        with users_lock:
+            user = users.get(data.email)
         if not user or not check_password_hash(user["password_hash"], data.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
@@ -80,7 +81,8 @@ class AuthService:
             )
 
         email = payload.get("sub")
-        user = users.get(email or "")
+        with users_lock:
+            user = users.get(email or "")
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
