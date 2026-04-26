@@ -55,10 +55,7 @@ class AudioStorageService:
                 overwrite=True,
                 content_settings=ContentSettings(content_type=content_type),
             )
-            return (
-                f"{self._settings.azure_storage_container}/"
-                f"{blob_name}"
-            )
+            return f"{self._settings.azure_storage_container}/{blob_name}"
         except Exception:
             logger.exception("Azure upload failed; falling back to local storage.")
             return None

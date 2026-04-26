@@ -11,7 +11,7 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 async def send_audio(
     audio: UploadFile = File(...),
     user: dict[str, str] = Depends(get_current_user),
-) -> dict[str, str]:
+) -> dict[str, str | int]:
     settings = get_settings()
     if not audio.filename:
         raise HTTPException(
@@ -50,7 +50,7 @@ async def send_audio(
     return {
         "message": "Audio received",
         "filename": audio.filename,
-        "size_bytes": str(total_size),
+        "size_bytes": total_size,
         "uploaded_by": user["email"],
         "storage": storage_backend,
         "location": location,
