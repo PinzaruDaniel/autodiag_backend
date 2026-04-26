@@ -4,9 +4,10 @@ from uuid import uuid4
 from app.core.config import get_settings
 
 try:
-    from azure.storage.blob import BlobServiceClient
+    from azure.storage.blob import BlobServiceClient, ContentSettings
 except ImportError:  # pragma: no cover
     BlobServiceClient = None  # type: ignore[assignment]
+    ContentSettings = None  # type: ignore[assignment]
 
 
 class AudioStorageService:
@@ -49,7 +50,7 @@ class AudioStorageService:
             blob_client.upload_blob(
                 content,
                 overwrite=True,
-                content_type=content_type,
+                content_settings=ContentSettings(content_type=content_type),
             )
             return (
                 f"{self._settings.azure_storage_container}/"
