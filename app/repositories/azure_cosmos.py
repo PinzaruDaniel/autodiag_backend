@@ -11,8 +11,14 @@ class AzureCosmosRepository:
     def __init__(self) -> None:
         self._settings = get_settings()
         if not self._settings.azure_cosmos_enabled:
+            missing: list[str] = []
+            if not self._settings.azure_cosmos_endpoint:
+                missing.append("AZURE_COSMOS_ENDPOINT")
+            if not self._settings.azure_cosmos_key:
+                missing.append("AZURE_COSMOS_KEY")
             raise RuntimeError(
-                "Azure Cosmos DB is required. Set AZURE_COSMOS_ENDPOINT and AZURE_COSMOS_KEY."
+                "Azure Cosmos DB is required. Missing variables: "
+                + ", ".join(missing)
             )
 
         self._client = CosmosClient(
@@ -42,7 +48,7 @@ class AzureCosmosRepository:
 
     @staticmethod
     def _is_expired(expires_at: str) -> bool:
-        return datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc)
+        return datetime.fromisoformat(expires_at) < datetime.now(timezone.utc)
 
     @staticmethod
     def _container_read_item(
@@ -81,7 +87,6 @@ class AzureCosmosRepository:
         self._refresh_tokens.create_item(
             {
                 "id": token_id,
-                "token_id": token_id,
                 "user_email": user_email,
                 "issued_at": issued_at,
                 "expires_at": expires_at,
@@ -128,7 +133,6 @@ class AzureCosmosRepository:
     ) -> dict[str, Any]:
         item = {
             "id": result_id,
-            "result_id": result_id,
             "user_email": user_email,
             "filename": filename,
             "size_bytes": size_bytes,
@@ -150,7 +154,8 @@ class AzureCosmosRepository:
         self, *, user_email: str, limit: int, offset: int
     ) -> list[dict[str, Any]]:
         query = (
-            "SELECT * FROM c WHERE c.user_email = @user_email "
+            "SELECT c.id, c.user_email, c.filename, c.size_bytes, c.storage, c.location, "
+            "c.model_name, c.predictions, c.created_at FROM c WHERE c.user_email = @user_email "
             "ORDER BY c.created_at DESC OFFSET @offset LIMIT @limit"
         )
         params = [

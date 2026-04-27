@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -6,6 +7,13 @@ from app.repositories.azure_cosmos import azure_cosmos_repository
 
 
 class AudioResultService:
+    @staticmethod
+    def _normalize_result(item: dict) -> dict:
+        normalized = dict(item)
+        normalized["result_id"] = str(normalized.get("id", ""))
+        normalized.pop("id", None)
+        return normalized
+
     def create_result(
         self,
         *,
@@ -15,10 +23,10 @@ class AudioResultService:
         storage: str,
         location: str,
         model_name: str,
-        predictions: list[dict[str, str | float]],
+        predictions: list[dict[str, Any]],
     ) -> dict:
         result_id = str(uuid4())
-        return azure_cosmos_repository.create_audio_result(
+        item = azure_cosmos_repository.create_audio_result(
             result_id=result_id,
             user_email=user_email,
             filename=filename,
@@ -28,11 +36,13 @@ class AudioResultService:
             model_name=model_name,
             predictions=predictions,
         )
+        return self._normalize_result(item)
 
     def list_results(self, *, user_email: str, limit: int, offset: int) -> list[dict]:
-        return azure_cosmos_repository.list_audio_results(
+        items = azure_cosmos_repository.list_audio_results(
             user_email=user_email, limit=limit, offset=offset
         )
+        return [self._normalize_result(item) for item in items]
 
     def get_result(self, *, user_email: str, result_id: str) -> dict:
         result = azure_cosmos_repository.get_audio_result(
@@ -42,7 +52,7 @@ class AudioResultService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Classification result not found"
             )
-        return result
+        return self._normalize_result(result)
 
 
 audio_result_service = AudioResultService()

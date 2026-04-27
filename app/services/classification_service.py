@@ -25,8 +25,12 @@ class ClassificationService:
             if remote_result is not None:
                 return remote_result
 
-        labels = [value.strip() for value in self._settings.ai_default_labels.split(",")]
-        label = labels[len(audio_content) % len(labels)] if labels else "unknown"
+        labels = [
+            value.strip()
+            for value in self._settings.ai_default_labels.split(",")
+            if value.strip()
+        ]
+        label = labels[0] if labels else "unknown"
         return {
             "model_name": self._settings.ai_model_name,
             "predictions": [{"label": label, "score": 0.0}],
@@ -56,8 +60,12 @@ class ClassificationService:
                 "predictions": predictions,
                 "source": "remote",
             }
-        except (error.URLError, TimeoutError, json.JSONDecodeError):
-            logger.exception("Audio classification failed; using fallback prediction.")
+        except (error.URLError, json.JSONDecodeError) as exc:
+            logger.exception(
+                "Audio classification failed for endpoint %s: %s. Using fallback prediction.",
+                endpoint,
+                str(exc),
+            )
             return None
 
     @staticmethod

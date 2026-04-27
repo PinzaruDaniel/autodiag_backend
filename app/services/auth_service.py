@@ -58,10 +58,6 @@ class AuthService:
             )
         azure_cosmos_repository.revoke_refresh_token(token_id=token_id, user_email=email)
 
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
-            )
         if not azure_cosmos_repository.get_user(email=email):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
