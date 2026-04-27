@@ -9,12 +9,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.config import get_settings
 from app.models.auth import AuthRequest, RefreshRequest, TokenPair
-from app.repositories.in_memory import (
-    refresh_tokens,
-    refresh_tokens_lock,
-    users,
-    users_lock,
-)
+from app.repositories.azure_cosmos import azure_cosmos_repository
 
 
 class AuthService:
@@ -23,21 +18,18 @@ class AuthService:
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
     def register(self, data: AuthRequest) -> TokenPair:
-        with users_lock:
-            if data.email in users:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
-                )
-
-            users[data.email] = {
-                "email": data.email,
-                "password_hash": generate_password_hash(data.password),
-            }
+        created = azure_cosmos_repository.create_user(
+            email=data.email,
+            password_hash=generate_password_hash(data.password),
+        )
+        if not created:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Email already exists"
+            )
         return self._build_token_pair(data.email)
 
     def login(self, data: AuthRequest) -> TokenPair:
-        with users_lock:
-            user = users.get(data.email)
+        user = azure_cosmos_repository.get_user(email=data.email)
         if not user or not check_password_hash(user["password_hash"], data.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
@@ -53,24 +45,27 @@ class AuthService:
 
         token_id = payload.get("jti")
         email = payload.get("sub")
-        with refresh_tokens_lock:
-            token_owner = refresh_tokens.get(token_id or "")
-            if not token_id or token_owner != email:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid refresh token",
-                )
-            del refresh_tokens[token_id]
+        if not token_id or not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+            )
+        if not azure_cosmos_repository.validate_refresh_token(
+            token_id=token_id, user_email=email
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            )
+        azure_cosmos_repository.revoke_refresh_token(token_id=token_id, user_email=email)
 
         if not email:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
             )
-        with users_lock:
-            if email not in users:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
-                )
+        if not azure_cosmos_repository.get_user(email=email):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+            )
         return self._build_token_pair(email)
 
     def get_current_user(self, token: str) -> dict[str, str]:
@@ -81,8 +76,7 @@ class AuthService:
             )
 
         email = payload.get("sub")
-        with users_lock:
-            user = users.get(email or "")
+        user = azure_cosmos_repository.get_user(email=email or "")
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
@@ -108,18 +102,23 @@ class AuthService:
 
     def _create_refresh_token(self, email: str) -> str:
         token_id = str(uuid4())
+        issued_at = datetime.now(timezone.utc)
+        expires_at = issued_at + timedelta(days=self._settings.refresh_token_expire_days)
         payload = {
             "sub": email,
             "jti": token_id,
             "type": "refresh",
-            "exp": datetime.now(timezone.utc)
-            + timedelta(days=self._settings.refresh_token_expire_days),
+            "exp": expires_at,
         }
         token = jwt.encode(
             payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm
         )
-        with refresh_tokens_lock:
-            refresh_tokens[token_id] = email
+        azure_cosmos_repository.store_refresh_token(
+            token_id=token_id,
+            user_email=email,
+            issued_at=issued_at.isoformat(),
+            expires_at=expires_at.isoformat(),
+        )
         return token
 
     def _decode_token(self, token: str) -> dict[str, Any]:

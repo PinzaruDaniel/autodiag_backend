@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 
 from app.core.config import get_settings
 from app.dependencies import get_current_user
+from app.models.audio import AudioResult, AudioResultsResponse
+from app.services.audio_result_service import audio_result_service
 from app.services.audio_storage_service import audio_storage_service
+from app.services.classification_service import classification_service
 
 router = APIRouter(prefix="/audio", tags=["audio"])
 
@@ -11,7 +14,7 @@ router = APIRouter(prefix="/audio", tags=["audio"])
 async def send_audio(
     audio: UploadFile = File(...),
     user: dict[str, str] = Depends(get_current_user),
-) -> dict[str, str | int]:
+) -> dict:
     settings = get_settings()
     if not audio.filename:
         raise HTTPException(
@@ -46,12 +49,57 @@ async def send_audio(
         content_type=audio.content_type,
         content=bytes(content),
     )
+    classification = classification_service.classify_audio(
+        audio_content=bytes(content),
+        content_type=audio.content_type,
+        filename=audio.filename,
+    )
+    result = audio_result_service.create_result(
+        user_email=user["email"],
+        filename=audio.filename,
+        size_bytes=total_size,
+        storage=storage_backend,
+        location=location,
+        model_name=classification["model_name"],
+        predictions=classification["predictions"],
+    )
 
     return {
         "message": "Audio received",
+        "result_id": result["result_id"],
         "filename": audio.filename,
         "size_bytes": total_size,
         "uploaded_by": user["email"],
         "storage": storage_backend,
         "location": location,
+        "classification": {
+            "model_name": classification["model_name"],
+            "predictions": classification["predictions"],
+        },
     }
+
+
+@router.get("/results", response_model=AudioResultsResponse)
+def list_results(
+    user: dict[str, str] = Depends(get_current_user),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> AudioResultsResponse:
+    items = audio_result_service.list_results(
+        user_email=user["email"],
+        limit=limit,
+        offset=offset,
+    )
+    return AudioResultsResponse(items=items, limit=limit, offset=offset)
+
+
+@router.get("/results/{result_id}", response_model=AudioResult)
+def get_result(
+    result_id: str,
+    user: dict[str, str] = Depends(get_current_user),
+) -> AudioResult:
+    result = audio_result_service.get_result(
+        user_email=user["email"],
+        result_id=result_id,
+    )
+    return AudioResult(**result)
