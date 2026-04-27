@@ -60,6 +60,19 @@ class ClassificationService:
                 "predictions": predictions,
                 "source": "remote",
             }
+        except error.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.read().decode("utf-8")
+            except Exception:
+                body = "<unavailable>"
+            logger.exception(
+                "Audio classification HTTP error for endpoint %s: status=%s body=%s",
+                endpoint,
+                exc.code,
+                body,
+            )
+            return None
         except (error.URLError, json.JSONDecodeError) as exc:
             logger.exception(
                 "Audio classification failed for endpoint %s: %s. Using fallback prediction.",
