@@ -82,13 +82,18 @@ docker run -p 8000:8000 \
   - JSON body: `{ "refresh_token": "..." }`
   - Returns a new access + refresh token pair.
 
+- `POST /auth/reset-password`
+  - JSON body: `{ "email": "user@example.com", "new_password": "new-password" }`
+  - Resets the password for an existing account (no auth required).
+  - Returns `204 No Content` on success.
+
 - `POST /audio/send`
   - Auth: `Authorization: Bearer <access_token>`
   - Multipart form-data field: `audio` (file)
   - Accepts `audio/*` content types up to 10 MB.
   - Tries Azure Blob Storage first (if configured), otherwise saves locally.
   - Runs AI classification (`laion/clap-htsat-fused`) via configured inference endpoint.
-  - Saves upload metadata + classification result in Azure Cosmos DB.
+  - Saves upload metadata + classification result in Azure Table Storage.
   - Returns upload confirmation, storage metadata, and classification output.
 
 - `GET /audio/results?limit=10&offset=0`
