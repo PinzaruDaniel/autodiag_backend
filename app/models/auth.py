@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class AuthRequest(BaseModel):
@@ -18,4 +18,4 @@ class RefreshRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
-    new_password: str
+    new_password: str = Field(min_length=8)

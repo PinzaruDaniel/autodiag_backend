@@ -21,7 +21,7 @@ class Settings:
     ai_inference_endpoint: str | None = None
     ai_inference_token: str | None = None
     ai_default_labels: str = (
-        "engine_knock,engine_misfire,engine_idle,engine_running,"
+        "engine_knock,engine_misfire,engine_idle,engine_normal,"
         "engine_overheating,engine_startup,engine_acceleration,engine_stall"
     )
 
@@ -61,7 +61,7 @@ def get_settings() -> Settings:
         ai_inference_token=os.getenv("AI_INFERENCE_TOKEN"),
         ai_default_labels=os.getenv(
             "AI_DEFAULT_LABELS",
-            "engine_knock,engine_misfire,engine_idle,engine_running,"
+            "engine_knock,engine_misfire,engine_idle,engine_normal,"
             "engine_overheating,engine_startup,engine_acceleration,engine_stall",
         ),
     )

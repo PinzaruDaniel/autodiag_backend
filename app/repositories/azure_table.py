@@ -185,7 +185,8 @@ class AzureTableRepository:
     def list_audio_results(
         self, *, user_email: str, limit: int, offset: int
     ) -> list[dict[str, Any]]:
-        filter_str = f"PartitionKey eq '{user_email}'"
+        safe_email = user_email.replace("'", "''")
+        filter_str = f"PartitionKey eq '{safe_email}'"
         entities = list(self._audio_results.query_entities(filter_str))
         entities.sort(key=lambda e: e.get("created_at", ""), reverse=True)
         sliced = entities[offset : offset + limit]
