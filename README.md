@@ -5,39 +5,68 @@ Minimal FastAPI backend for a mobile app with:
 - login
 - refresh token
 - send audio endpoint + AI classification
-- Azure Cosmos DB persistence for users, refresh tokens, and audio AI results
+- Azure Table Storage persistence for users, refresh tokens, and audio AI results
 - modular project structure
-- Azure upload with local fallback
+- Azure Blob upload with local fallback
 
-## Setup
+## Azure Infrastructure
+
+All required Azure resources (Storage Account, Blob container) can be provisioned with the
+included Bicep templates and deployment script:
+
+```bash
+chmod +x deploy.sh
+./deploy.sh [resource-group] [location]
+# defaults: resource-group=autodiag-rg  location=eastus
+```
+
+The script will:
+1. Create a Resource Group
+2. Deploy `infra/main.bicep` (Storage Account + Blob container)
+3. Print the connection string to set as `AZURE_STORAGE_CONNECTION_STRING`
+4. Optionally build a Docker image and deploy to Azure Container Apps
+
+> Azure Table Storage tables (`users`, `refreshtokens`, `audioresults`) are created
+> automatically by the app on first startup.
+
+## Local Setup
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# copy the example env file and fill in values
+cp .env.example .env
+
+# required
 export JWT_SECRET="replace-with-a-strong-secret"
-export AZURE_STORAGE_CONNECTION_STRING="<azure-blob-connection-string>"
+export AZURE_STORAGE_CONNECTION_STRING="<connection-string-from-deploy-script>"
+
+# optional – defaults shown
 export AZURE_STORAGE_CONTAINER="audio"
-# optional local fallback folder (default: data/audio)
+export AZURE_TABLE_USERS="users"
+export AZURE_TABLE_REFRESH_TOKENS="refreshtokens"
+export AZURE_TABLE_AUDIO_RESULTS="audioresults"
 export LOCAL_AUDIO_DIR="data/audio"
-export AZURE_COSMOS_ENDPOINT="https://<account>.documents.azure.com:443/"
-export AZURE_COSMOS_KEY="<cosmos-key>"
-export AZURE_COSMOS_DATABASE="autodiag"
-export AZURE_COSMOS_USERS_CONTAINER="users"
-export AZURE_COSMOS_REFRESH_TOKENS_CONTAINER="refresh_tokens"
-export AZURE_COSMOS_AUDIO_RESULTS_CONTAINER="audio_results"
-# AI settings
-export AI_MODEL_NAME="laion/clap-htsat-fused"
-# optional hosted inference endpoint URL
-export AI_INFERENCE_ENDPOINT="https://api-inference.huggingface.co/models/laion/clap-htsat-fused"
-# optional bearer token for inference endpoint
+
+# optional AI inference endpoint
+export AI_INFERENCE_ENDPOINT="https://api-inference.huggingface.co/models/laion/clap-htsat-unfused"
 export AI_INFERENCE_TOKEN="<inference-token>"
-# fallback labels used when endpoint is unavailable
-export AI_DEFAULT_LABELS="engine,brake,tire,road_noise,silence"
+export AI_DEFAULT_LABELS="engine_knock,engine_misfire,engine_idle,engine_normal,engine_overheating,engine_startup,engine_acceleration,engine_stall"
+
 uvicorn app.main:app --reload
 ```
 
-> Note: users, refresh token lifecycle records, and audio AI results are persisted in Azure Cosmos DB.
+## Docker
+
+```bash
+docker build -t autodiag-backend .
+docker run -p 8000:8000 \
+  -e JWT_SECRET="..." \
+  -e AZURE_STORAGE_CONNECTION_STRING="..." \
+  autodiag-backend
+```
 
 ## Endpoints
 
@@ -75,5 +104,11 @@ uvicorn app.main:app --reload
 - `app/routes/` - API routers
 - `app/services/` - business logic (auth + audio storage + AI classification/results)
 - `app/models/` - request/response models
-- `app/repositories/` - Azure Cosmos DB data store
+- `app/repositories/` - Azure Table Storage data store
 - `app/core/` - app configuration
+- `infra/` - Bicep templates for Azure resource provisioning
+  - `main.bicep` – Storage Account + Blob container
+  - `containerapp.bicep` – Azure Container Apps hosting (optional)
+- `Dockerfile` - container image
+- `deploy.sh` - end-to-end provisioning script
+- `.env.example` - environment variable reference
