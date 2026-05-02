@@ -2,15 +2,11 @@ import logging
 from pathlib import Path
 from uuid import uuid4
 
+from azure.storage.blob import BlobServiceClient, ContentSettings
+
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
-
-try:
-    from azure.storage.blob import BlobServiceClient, ContentSettings
-except ImportError:  # pragma: no cover
-    BlobServiceClient = None  # type: ignore[assignment]
-    ContentSettings = None  # type: ignore[assignment]
 
 
 class AudioStorageService:
@@ -36,7 +32,7 @@ class AudioStorageService:
     def _try_store_in_azure(
         self, *, blob_name: str, content_type: str, content: bytes
     ) -> str | None:
-        if not self._settings.azure_storage_connection_string or BlobServiceClient is None:
+        if not self._settings.azure_storage_connection_string:
             return None
 
         try:

@@ -14,16 +14,16 @@ class Settings:
     local_audio_dir: str = "data/audio"
     azure_storage_connection_string: str | None = None
     azure_storage_container: str = "audio"
-    azure_cosmos_endpoint: str | None = None
-    azure_cosmos_key: str | None = None
-    azure_cosmos_database: str = "autodiag"
-    azure_cosmos_users_container: str = "users"
-    azure_cosmos_refresh_tokens_container: str = "refresh_tokens"
-    azure_cosmos_audio_results_container: str = "audio_results"
-    ai_model_name: str = "laion/clap-htsat-fused"
+    azure_table_users: str = "users"
+    azure_table_refresh_tokens: str = "refreshtokens"
+    azure_table_audio_results: str = "audioresults"
+    ai_model_name: str = "laion/clap-htsat-unfused"
     ai_inference_endpoint: str | None = None
     ai_inference_token: str | None = None
-    ai_default_labels: str = "engine,brake,tire,road_noise,silence"
+    ai_default_labels: str = (
+        "engine_knock,engine_misfire,engine_idle,engine_normal,"
+        "engine_overheating,engine_startup,engine_acceleration,engine_stall"
+    )
 
     @property
     def max_audio_size_bytes(self) -> int:
@@ -38,8 +38,8 @@ class Settings:
         return bool(self.azure_storage_connection_string)
 
     @property
-    def azure_cosmos_enabled(self) -> bool:
-        return bool(self.azure_cosmos_endpoint and self.azure_cosmos_key)
+    def azure_table_enabled(self) -> bool:
+        return bool(self.azure_storage_connection_string)
 
 
 @lru_cache
@@ -53,22 +53,15 @@ def get_settings() -> Settings:
         azure_storage_connection_string=os.getenv("AZURE_STORAGE_CONNECTION_STRING"),
         azure_storage_container=os.getenv("AZURE_STORAGE_CONTAINER", "audio"),
         local_audio_dir=os.getenv("LOCAL_AUDIO_DIR", "data/audio"),
-        azure_cosmos_endpoint=os.getenv("AZURE_COSMOS_ENDPOINT"),
-        azure_cosmos_key=os.getenv("AZURE_COSMOS_KEY"),
-        azure_cosmos_database=os.getenv("AZURE_COSMOS_DATABASE", "autodiag"),
-        azure_cosmos_users_container=os.getenv(
-            "AZURE_COSMOS_USERS_CONTAINER", "users"
-        ),
-        azure_cosmos_refresh_tokens_container=os.getenv(
-            "AZURE_COSMOS_REFRESH_TOKENS_CONTAINER", "refresh_tokens"
-        ),
-        azure_cosmos_audio_results_container=os.getenv(
-            "AZURE_COSMOS_AUDIO_RESULTS_CONTAINER", "audio_results"
-        ),
-        ai_model_name=os.getenv("AI_MODEL_NAME", "laion/clap-htsat-fused"),
+        azure_table_users=os.getenv("AZURE_TABLE_USERS", "users"),
+        azure_table_refresh_tokens=os.getenv("AZURE_TABLE_REFRESH_TOKENS", "refreshtokens"),
+        azure_table_audio_results=os.getenv("AZURE_TABLE_AUDIO_RESULTS", "audioresults"),
+        ai_model_name=os.getenv("AI_MODEL_NAME", "laion/clap-htsat-unfused"),
         ai_inference_endpoint=os.getenv("AI_INFERENCE_ENDPOINT"),
         ai_inference_token=os.getenv("AI_INFERENCE_TOKEN"),
         ai_default_labels=os.getenv(
-            "AI_DEFAULT_LABELS", "engine,brake,tire,road_noise,silence"
+            "AI_DEFAULT_LABELS",
+            "engine_knock,engine_misfire,engine_idle,engine_normal,"
+            "engine_overheating,engine_startup,engine_acceleration,engine_stall",
         ),
     )

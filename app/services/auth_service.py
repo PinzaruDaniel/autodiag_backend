@@ -8,8 +8,8 @@ from fastapi.security import OAuth2PasswordBearer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.core.config import get_settings
-from app.models.auth import AuthRequest, RefreshRequest, TokenPair
-from app.repositories.azure_cosmos import azure_cosmos_repository
+from app.models.auth import AuthRequest, RefreshRequest, ResetPasswordRequest, TokenPair
+from app.repositories.azure_table import azure_table_repository
 
 
 class AuthService:
@@ -18,7 +18,7 @@ class AuthService:
         self.oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
     def register(self, data: AuthRequest) -> TokenPair:
-        created = azure_cosmos_repository.create_user(
+        created = azure_table_repository.create_user(
             email=data.email,
             password_hash=generate_password_hash(data.password),
         )
@@ -29,7 +29,7 @@ class AuthService:
         return self._build_token_pair(data.email)
 
     def login(self, data: AuthRequest) -> TokenPair:
-        user = azure_cosmos_repository.get_user(email=data.email)
+        user = azure_table_repository.get_user(email=data.email)
         if not user or not check_password_hash(user["password_hash"], data.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
@@ -49,20 +49,31 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
             )
-        if not azure_cosmos_repository.validate_refresh_token(
+        if not azure_table_repository.validate_refresh_token(
             token_id=token_id, user_email=email
         ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
             )
-        azure_cosmos_repository.revoke_refresh_token(token_id=token_id, user_email=email)
+        azure_table_repository.revoke_refresh_token(token_id=token_id, user_email=email)
 
-        if not azure_cosmos_repository.get_user(email=email):
+        if not azure_table_repository.get_user(email=email):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
             )
         return self._build_token_pair(email)
+
+    def reset_password(self, data: ResetPasswordRequest) -> None:
+        user = azure_table_repository.get_user(email=data.email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        azure_table_repository.update_user_password(
+            email=data.email,
+            new_password_hash=generate_password_hash(data.new_password),
+        )
 
     def get_current_user(self, token: str) -> dict[str, str]:
         payload = self._decode_token(token)
@@ -72,7 +83,7 @@ class AuthService:
             )
 
         email = payload.get("sub")
-        user = azure_cosmos_repository.get_user(email=email or "")
+        user = azure_table_repository.get_user(email=email or "")
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
@@ -109,7 +120,7 @@ class AuthService:
         token = jwt.encode(
             payload, self._settings.jwt_secret, algorithm=self._settings.jwt_algorithm
         )
-        azure_cosmos_repository.store_refresh_token(
+        azure_table_repository.store_refresh_token(
             token_id=token_id,
             user_email=email,
             issued_at=issued_at.isoformat(),

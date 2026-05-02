@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 
-from app.repositories.azure_cosmos import azure_cosmos_repository
+from app.repositories.azure_table import azure_table_repository
 
 
 class AudioResultService:
@@ -26,7 +26,7 @@ class AudioResultService:
         predictions: list[dict[str, Any]],
     ) -> dict:
         result_id = str(uuid4())
-        item = azure_cosmos_repository.create_audio_result(
+        item = azure_table_repository.create_audio_result(
             result_id=result_id,
             user_email=user_email,
             filename=filename,
@@ -39,13 +39,13 @@ class AudioResultService:
         return self._normalize_result(item)
 
     def list_results(self, *, user_email: str, limit: int, offset: int) -> list[dict]:
-        items = azure_cosmos_repository.list_audio_results(
+        items = azure_table_repository.list_audio_results(
             user_email=user_email, limit=limit, offset=offset
         )
         return [self._normalize_result(item) for item in items]
 
     def get_result(self, *, user_email: str, result_id: str) -> dict:
-        result = azure_cosmos_repository.get_audio_result(
+        result = azure_table_repository.get_audio_result(
             result_id=result_id, user_email=user_email
         )
         if not result:
