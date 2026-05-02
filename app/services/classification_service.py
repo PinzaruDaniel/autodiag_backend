@@ -1,7 +1,11 @@
-import json
+import io
 import logging
 from typing import Any
-from urllib import error, request
+
+import numpy as np
+import soundfile as sf
+import torch
+from transformers import ClapModel, ClapProcessor
 
 from app.core.config import get_settings
 
@@ -10,95 +14,78 @@ logger = logging.getLogger(__name__)
 
 class ClassificationService:
     def __init__(self) -> None:
-        self._settings = get_settings()
+        self._model: ClapModel | None = None
+        self._processor: ClapProcessor | None = None
+
+    def _load_model(self) -> None:
+        if self._model is not None:
+            return
+        model_name = get_settings().ai_model_name
+        logger.info("Loading CLAP model '%s'…", model_name)
+        self._processor = ClapProcessor.from_pretrained(model_name)
+        self._model = ClapModel.from_pretrained(model_name)
+        self._model.eval()
+        logger.info("CLAP model loaded.")
 
     def classify_audio(
         self, *, audio_content: bytes, content_type: str, filename: str
     ) -> dict[str, Any]:
-        endpoint = self._settings.ai_inference_endpoint
-        if endpoint:
-            remote_result = self._classify_with_remote_endpoint(
-                endpoint=endpoint,
-                audio_content=audio_content,
-                content_type=content_type,
-            )
-            if remote_result is not None:
-                return remote_result
-
+        settings = get_settings()
         labels = [
             value.strip()
-            for value in self._settings.ai_default_labels.split(",")
+            for value in settings.ai_default_labels.split(",")
             if value.strip()
         ]
-        label = labels[0] if labels else "unknown"
-        return {
-            "model_name": self._settings.ai_model_name,
-            "predictions": [{"label": label, "score": 0.0}],
-            "source": "fallback",
-            "filename": filename,
-        }
 
-    def _classify_with_remote_endpoint(
-        self, *, endpoint: str, audio_content: bytes, content_type: str
-    ) -> dict[str, Any] | None:
-        headers = {"Content-Type": content_type}
-        if self._settings.ai_inference_token:
-            headers["Authorization"] = f"Bearer {self._settings.ai_inference_token}"
-
-        req = request.Request(
-            url=endpoint,
-            data=audio_content,
-            headers=headers,
-            method="POST",
-        )
         try:
-            with request.urlopen(req, timeout=30) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-            predictions = self._normalize_predictions(payload)
-            return {
-                "model_name": self._settings.ai_model_name,
-                "predictions": predictions,
-                "source": "remote",
-            }
-        except error.HTTPError as exc:
-            body = ""
-            try:
-                body = exc.read().decode("utf-8")
-            except Exception:
-                body = "<unavailable>"
-            logger.exception(
-                "Audio classification HTTP error for endpoint %s: status=%s body=%s",
-                endpoint,
-                exc.code,
-                body,
+            self._load_model()
+            audio_array, sample_rate = sf.read(io.BytesIO(audio_content))
+            # Convert stereo/multi-channel to mono
+            if audio_array.ndim > 1:
+                audio_array = audio_array.mean(axis=1)
+            audio_array = audio_array.astype(np.float32)
+
+            inputs = self._processor(
+                audios=audio_array,
+                text=labels,
+                return_tensors="pt",
+                padding=True,
+                sampling_rate=sample_rate,
             )
-            return None
-        except (error.URLError, json.JSONDecodeError) as exc:
+
+            with torch.no_grad():
+                outputs = self._model(**inputs)
+                probs = outputs.logits_per_audio.softmax(dim=-1).squeeze(0).tolist()
+
+            predictions = sorted(
+                [
+                    {"label": label, "score": float(score)}
+                    for label, score in zip(labels, probs)
+                ],
+                key=lambda x: x["score"],
+                reverse=True,
+            )
+
+            return {
+                "model_name": settings.ai_model_name,
+                "predictions": predictions,
+                "source": "local",
+                "filename": filename,
+            }
+
+        except Exception as exc:
             logger.exception(
-                "Audio classification failed for endpoint %s: %s. Using fallback prediction.",
-                endpoint,
+                "Local AI classification failed for '%s': %s. Using fallback.",
+                filename,
                 str(exc),
             )
-            return None
-
-    @staticmethod
-    def _normalize_predictions(payload: Any) -> list[dict[str, Any]]:
-        if isinstance(payload, dict) and isinstance(payload.get("predictions"), list):
-            raw_predictions = payload["predictions"]
-        elif isinstance(payload, list):
-            raw_predictions = payload
-        else:
-            return []
-
-        normalized: list[dict[str, Any]] = []
-        for item in raw_predictions:
-            if not isinstance(item, dict):
-                continue
-            label = item.get("label")
-            score = item.get("score")
-            if isinstance(label, str) and isinstance(score, (int, float)):
-                normalized.append({"label": label, "score": float(score)})
-        return normalized
+            label = labels[0] if labels else "unknown"
+            return {
+                "model_name": settings.ai_model_name,
+                "predictions": [{"label": label, "score": 0.0}],
+                "source": "fallback",
+                "filename": filename,
+            }
 
 
 classification_service = ClassificationService()

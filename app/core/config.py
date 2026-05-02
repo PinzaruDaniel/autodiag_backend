@@ -18,8 +18,6 @@ class Settings:
     azure_table_refresh_tokens: str = "refreshtokens"
     azure_table_audio_results: str = "audioresults"
     ai_model_name: str = "laion/clap-htsat-unfused"
-    ai_inference_endpoint: str | None = None
-    ai_inference_token: str | None = None
     ai_default_labels: str = (
         "engine_knock,engine_misfire,engine_idle,engine_normal,"
         "engine_overheating,engine_startup,engine_acceleration,engine_stall"
@@ -57,8 +55,6 @@ def get_settings() -> Settings:
         azure_table_refresh_tokens=os.getenv("AZURE_TABLE_REFRESH_TOKENS", "refreshtokens"),
         azure_table_audio_results=os.getenv("AZURE_TABLE_AUDIO_RESULTS", "audioresults"),
         ai_model_name=os.getenv("AI_MODEL_NAME", "laion/clap-htsat-unfused"),
-        ai_inference_endpoint=os.getenv("AI_INFERENCE_ENDPOINT"),
-        ai_inference_token=os.getenv("AI_INFERENCE_TOKEN"),
         ai_default_labels=os.getenv(
             "AI_DEFAULT_LABELS",
             "engine_knock,engine_misfire,engine_idle,engine_normal,"
