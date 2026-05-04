@@ -56,7 +56,7 @@ cp .env.example .env
 
 # required
 export JWT_SECRET="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6ImF1dG9EaWFnIEFJIn0.xcp_3qYt2vQvDq2e8arHs480nAH0ptmVpiZ5-h3c0pA"
-export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=autodiagstore;AccountKey=0mym3/F5cML6cvBCk0R20M3Ljko1KQVb3XSXKQZNJdK8iNBy4vTUtIpNmxntO9QqbNJFCGL2Vs3j+ASt6zDmcg==;BlobEndpoint=https://autodiagstore.blob.core.windows.net/;FileEndpoint=https://autodiagstore.file.core.windows.net/;QueueEndpoint=https://autodiagstore.queue.core.windows.net/;TableEndpoint=https://autodiagstore.table.core.windows.net/"
+export AZURE_STORAGE_CONNECTION_STRING="<your connection String>"
 # optional – defaults shown
 export AZURE_STORAGE_CONTAINER="audio"
 export AZURE_TABLE_USERS="users"
