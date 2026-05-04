@@ -95,7 +95,7 @@ def list_results(
 
 @router.get("/results/{result_id}", response_model=AudioResult)
 def get_result(
-    result_id: str,
+    result_id: int,
     user: dict[str, str] = Depends(get_current_user),
 ) -> AudioResult:
     result = audio_result_service.get_result(

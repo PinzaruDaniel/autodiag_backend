@@ -1,5 +1,5 @@
 from typing import Any
-from uuid import uuid4
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 
@@ -10,7 +10,7 @@ class AudioResultService:
     @staticmethod
     def _normalize_result(item: dict) -> dict:
         normalized = dict(item)
-        normalized["result_id"] = str(normalized.get("id", ""))
+        normalized["result_id"] = int(normalized.get("id", 0))
         normalized.pop("id", None)
         return normalized
 
@@ -25,9 +25,9 @@ class AudioResultService:
         model_name: str,
         predictions: list[dict[str, Any]],
     ) -> dict:
-        result_id = str(uuid4())
+        result_id = int(datetime.now(timezone.utc).timestamp() * 1_000_000)
         item = azure_table_repository.create_audio_result(
-            result_id=result_id,
+            result_id=str(result_id),
             user_email=user_email,
             filename=filename,
             size_bytes=size_bytes,
@@ -44,9 +44,9 @@ class AudioResultService:
         )
         return [self._normalize_result(item) for item in items]
 
-    def get_result(self, *, user_email: str, result_id: str) -> dict:
+    def get_result(self, *, user_email: str, result_id: int) -> dict:
         result = azure_table_repository.get_audio_result(
-            result_id=result_id, user_email=user_email
+            result_id=str(result_id), user_email=user_email
         )
         if not result:
             raise HTTPException(
