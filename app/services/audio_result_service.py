@@ -10,7 +10,7 @@ class AudioResultService:
     @staticmethod
     def _normalize_result(item: dict) -> dict:
         normalized = dict(item)
-        normalized["result_id"] = int(normalized.get("id", 0))
+        normalized["result_id"] = str(normalized.get("id", ""))
         normalized.pop("id", None)
         return normalized
 
@@ -44,9 +44,9 @@ class AudioResultService:
         )
         return [self._normalize_result(item) for item in items]
 
-    def get_result(self, *, user_email: str, result_id: int) -> dict:
+    def get_result(self, *, user_email: str, result_id: str) -> dict:
         result = azure_table_repository.get_audio_result(
-            result_id=str(result_id), user_email=user_email
+            result_id=result_id, user_email=user_email
         )
         if not result:
             raise HTTPException(

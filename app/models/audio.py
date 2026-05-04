@@ -7,7 +7,7 @@ class Prediction(BaseModel):
 
 
 class AudioResult(BaseModel):
-    result_id: int
+    result_id: str
     user_email: str
     filename: str
     size_bytes: int
