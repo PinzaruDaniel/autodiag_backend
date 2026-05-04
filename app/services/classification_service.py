@@ -45,6 +45,17 @@ class ClassificationService:
                 audio_array = audio_array.mean(axis=1)
             audio_array = audio_array.astype(np.float32)
 
+            # CLAP requires 48000 Hz; resample if needed
+            target_sr = 48000
+            if sample_rate != target_sr:
+                num_samples = int(round(len(audio_array) * target_sr / sample_rate))
+                audio_array = np.interp(
+                    np.linspace(0, len(audio_array) - 1, num_samples),
+                    np.arange(len(audio_array)),
+                    audio_array,
+                )
+                sample_rate = target_sr
+
             inputs = self._processor(
                 audios=audio_array,
                 text=labels,
