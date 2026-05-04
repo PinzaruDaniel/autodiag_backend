@@ -19,8 +19,9 @@ class Settings:
     azure_table_audio_results: str = "audioresults"
     ai_model_name: str = "laion/clap-htsat-unfused"
     ai_default_labels: str = (
-        "engine_knock,engine_misfire,engine_idle,engine_normal,"
-        "engine_overheating,engine_startup,engine_acceleration,engine_stall"
+        "engine knock,engine misfire,engine idle,engine normal,"
+        "engine overheating,engine startup,engine acceleration,engine stall,"
+        "music,speech,wind noise,rain,crowd noise,silence,background noise"
     )
 
     @property
@@ -57,7 +58,8 @@ def get_settings() -> Settings:
         ai_model_name=os.getenv("AI_MODEL_NAME", "laion/clap-htsat-unfused"),
         ai_default_labels=os.getenv(
             "AI_DEFAULT_LABELS",
-            "engine_knock,engine_misfire,engine_idle,engine_normal,"
-            "engine_overheating,engine_startup,engine_acceleration,engine_stall",
+            "engine knock,engine misfire,engine idle,engine normal,"
+            "engine overheating,engine startup,engine acceleration,engine stall,"
+            "music,speech,wind noise,rain,crowd noise,silence,background noise",
         ),
     )
