@@ -38,9 +38,9 @@ class AudioResultService:
         )
         return self._normalize_result(item)
 
-    def list_results(self, *, user_email: str, limit: int, offset: int) -> list[dict]:
+    def list_results(self, *, user_email: str, limit: int, page: int) -> list[dict]:
         items = azure_table_repository.list_audio_results(
-            user_email=user_email, limit=limit, offset=offset
+            user_email=user_email, limit=limit, page=page
         )
         return [self._normalize_result(item) for item in items]
 

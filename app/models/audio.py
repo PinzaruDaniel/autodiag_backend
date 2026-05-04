@@ -21,4 +21,4 @@ class AudioResult(BaseModel):
 class AudioResultsResponse(BaseModel):
     items: list[AudioResult]
     limit: int
-    offset: int
+    page: int

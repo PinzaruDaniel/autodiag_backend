@@ -83,14 +83,14 @@ async def send_audio(
 def list_results(
     user: dict[str, str] = Depends(get_current_user),
     limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    page: int = Query(1, ge=1),
 ) -> AudioResultsResponse:
     items = audio_result_service.list_results(
         user_email=user["email"],
         limit=limit,
-        offset=offset,
+        page=page,
     )
-    return AudioResultsResponse(items=items, limit=limit, offset=offset)
+    return AudioResultsResponse(items=items, limit=limit, page=page)
 
 
 @router.get("/results/{result_id}", response_model=AudioResult)
