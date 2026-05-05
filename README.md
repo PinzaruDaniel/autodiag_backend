@@ -4,10 +4,25 @@ Minimal FastAPI backend for a mobile app with:
 - register
 - login
 - refresh token
-- send audio endpoint + AI classification
+- send audio endpoint + local AI classification
 - Azure Table Storage persistence for users, refresh tokens, and audio AI results
 - modular project structure
 - Azure Blob upload with local fallback
+
+## AI Classification
+
+Audio classification runs **locally** using the [`laion/clap-htsat-unfused`](https://huggingface.co/laion/clap-htsat-unfused)
+model loaded directly via Hugging Face `transformers`.  No external inference endpoint is required.
+
+How it works:
+1. The model and processor are downloaded from the Hugging Face Hub on first use and cached automatically.
+2. Uploaded audio bytes are decoded with `soundfile` and converted to a 32-bit mono numpy array.
+3. `ClapProcessor` encodes both the audio and the candidate label strings.
+4. `ClapModel` produces audio↔text similarity logits that are normalised with softmax into per-label probabilities.
+5. Predictions are returned sorted by score (highest first).
+
+The candidate labels are controlled by `AI_DEFAULT_LABELS` (comma-separated). Any set of
+descriptive text labels can be used – the model performs zero-shot classification.
 
 ## Azure Infrastructure
 
@@ -50,13 +65,16 @@ export AZURE_TABLE_REFRESH_TOKENS="refreshtokens"
 export AZURE_TABLE_AUDIO_RESULTS="audioresults"
 export LOCAL_AUDIO_DIR="data/audio"
 
-# optional AI inference endpoint
-export AI_INFERENCE_ENDPOINT="https://api-inference.huggingface.co/models/laion/clap-htsat-unfused"
-export AI_INFERENCE_TOKEN="<inference-token>"
+# AI model (downloaded automatically on first request)
+export AI_MODEL_NAME="laion/clap-htsat-unfused"
 export AI_DEFAULT_LABELS="engine_knock,engine_misfire,engine_idle,engine_normal,engine_overheating,engine_startup,engine_acceleration,engine_stall"
 
 uvicorn app.main:app --reload
 ```
+
+> **Note:** On first startup the CLAP model weights (~600 MB) are downloaded from the
+> Hugging Face Hub and cached in `~/.cache/huggingface/`.  Subsequent starts load the
+> cached weights instantly.  Set `HF_HOME` to a custom path to change the cache location.
 
 ## Docker
 
@@ -92,7 +110,7 @@ docker run -p 8000:8000 \
   - Multipart form-data field: `audio` (file)
   - Accepts `audio/*` content types up to 10 MB.
   - Tries Azure Blob Storage first (if configured), otherwise saves locally.
-  - Runs AI classification (`laion/clap-htsat-fused`) via configured inference endpoint.
+  - Runs zero-shot classification with `laion/clap-htsat-unfused` locally via `transformers`.
   - Saves upload metadata + classification result in Azure Table Storage.
   - Returns upload confirmation, storage metadata, and classification output.
 
@@ -108,6 +126,7 @@ docker run -p 8000:8000 \
 
 - `app/routes/` - API routers
 - `app/services/` - business logic (auth + audio storage + AI classification/results)
+  - `classification_service.py` – loads CLAP model locally and runs zero-shot inference
 - `app/models/` - request/response models
 - `app/repositories/` - Azure Table Storage data store
 - `app/core/` - app configuration
@@ -117,3 +136,4 @@ docker run -p 8000:8000 \
 - `Dockerfile` - container image
 - `deploy.sh` - end-to-end provisioning script
 - `.env.example` - environment variable reference
+

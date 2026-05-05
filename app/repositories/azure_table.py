@@ -183,12 +183,13 @@ class AzureTableRepository:
             return None
 
     def list_audio_results(
-        self, *, user_email: str, limit: int, offset: int
+        self, *, user_email: str, limit: int, page: int
     ) -> list[dict[str, Any]]:
         safe_email = user_email.replace("'", "''")
         filter_str = f"PartitionKey eq '{safe_email}'"
         entities = list(self._audio_results.query_entities(filter_str))
         entities.sort(key=lambda e: e.get("created_at", ""), reverse=True)
+        offset = (page - 1) * limit
         sliced = entities[offset : offset + limit]
         return [
             self._deserialize_predictions(self._entity_to_dict(e)) for e in sliced
