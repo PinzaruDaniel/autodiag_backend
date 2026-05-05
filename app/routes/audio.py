@@ -67,6 +67,7 @@ async def send_audio(
     return {
         "message": "Audio received",
         "result_id": result["result_id"],
+        "created_at": result.get("created_at"),
         "filename": audio.filename,
         "size_bytes": total_size,
         "uploaded_by": user["email"],
