@@ -55,9 +55,8 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # required
-export JWT_SECRET="replace-with-a-strong-secret"
-export AZURE_STORAGE_CONNECTION_STRING="<connection-string-from-deploy-script>"
-
+export JWT_SECRET="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhcHBfbmFtZSI6ImF1dG9EaWFnIEFJIn0.xcp_3qYt2vQvDq2e8arHs480nAH0ptmVpiZ5-h3c0pA"
+export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName=autodiagstore;AccountKey=0mym3/F5cML6cvBCk0R20M3Ljko1KQVb3XSXKQZNJdK8iNBy4vTUtIpNmxntO9QqbNJFCGL2Vs3j+ASt6zDmcg==;BlobEndpoint=https://autodiagstore.blob.core.windows.net/;FileEndpoint=https://autodiagstore.file.core.windows.net/;QueueEndpoint=https://autodiagstore.queue.core.windows.net/;TableEndpoint=https://autodiagstore.table.core.windows.net/"
 # optional – defaults shown
 export AZURE_STORAGE_CONTAINER="audio"
 export AZURE_TABLE_USERS="users"
@@ -67,9 +66,8 @@ export LOCAL_AUDIO_DIR="data/audio"
 
 # AI model (downloaded automatically on first request)
 export AI_MODEL_NAME="laion/clap-htsat-unfused"
-export AI_DEFAULT_LABELS="engine_knock,engine_misfire,engine_idle,engine_normal,engine_overheating,engine_startup,engine_acceleration,engine_stall"
-
-uvicorn app.main:app --reload
+export AI_DEFAULT_LABELS="engine knock,engine misfire,engine idle,engine normal,engine overheating,engine startup,engine acceleration,music,speech,wind noise,rain,crowd noise,silence,background noise"
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 > **Note:** On first startup the CLAP model weights (~600 MB) are downloaded from the
