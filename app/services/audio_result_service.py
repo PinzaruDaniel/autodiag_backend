@@ -54,5 +54,8 @@ class AudioResultService:
             )
         return self._normalize_result(result)
 
+    def delete_results_for_user(self, *, user_email: str) -> int:
+        return azure_table_repository.delete_audio_results_for_user(user_email=user_email)
+
 
 audio_result_service = AudioResultService()
