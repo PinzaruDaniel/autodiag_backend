@@ -106,6 +106,7 @@ def get_result(
     return AudioResult(**result)
 
 
+
 @router.delete("/results")
 def delete_results(
     user: dict[str, str] = Depends(get_current_user),
