@@ -195,5 +195,18 @@ class AzureTableRepository:
             self._deserialize_predictions(self._entity_to_dict(e)) for e in sliced
         ]
 
+    def delete_audio_results_for_user(self, *, user_email: str) -> int:
+        safe_email = user_email.replace("'", "''")
+        filter_str = f"PartitionKey eq '{safe_email}'"
+        entities = list(self._audio_results.query_entities(filter_str))
+        deleted = 0
+        for entity in entities:
+            row_key = entity.get("RowKey")
+            if not row_key:
+                continue
+            self._audio_results.delete_entity(partition_key=user_email, row_key=row_key)
+            deleted += 1
+        return deleted
+
 
 azure_table_repository = AzureTableRepository()

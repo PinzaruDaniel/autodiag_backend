@@ -104,3 +104,13 @@ def get_result(
         result_id=result_id,
     )
     return AudioResult(**result)
+
+
+
+@router.delete("/results")
+def delete_results(
+    user: dict[str, str] = Depends(get_current_user),
+) -> dict:
+    deleted = audio_result_service.delete_results_for_user(user_email=user["email"])
+    return {"deleted": deleted}
+
