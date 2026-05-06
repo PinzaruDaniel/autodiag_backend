@@ -1,7 +1,13 @@
-import json
+import io
 import logging
 from typing import Any
-from urllib import error, request
+
+import librosa
+import numpy as np
+import soundfile as sf
+import torch
+from fastapi import HTTPException, status
+from transformers import ClapModel, ClapProcessor
 
 from app.core.config import get_settings
 
@@ -10,95 +16,163 @@ logger = logging.getLogger(__name__)
 
 class ClassificationService:
     def __init__(self) -> None:
-        self._settings = get_settings()
+        self._model: ClapModel | None = None
+        self._processor: ClapProcessor | None = None
+
+    def _load_model(self) -> None:
+        if self._model is not None:
+            return
+        model_name = get_settings().ai_model_name
+        logger.info("Loading CLAP model '%s'…", model_name)
+        self._processor = ClapProcessor.from_pretrained(model_name)
+        self._model = ClapModel.from_pretrained(model_name)
+        self._model.eval()
+        logger.info("CLAP model loaded.")
+
+    @staticmethod
+    def _read_audio(
+        audio_content: bytes, content_type: str, filename: str
+    ) -> tuple[np.ndarray, int]:
+        """Read audio file, handling both MP3 and other formats."""
+        is_mp3 = (
+            filename.lower().endswith(".mp3")
+            or content_type.lower() in ("audio/mpeg", "audio/mp3")
+        )
+
+        logger.info(
+            "Reading audio file '%s' (is_mp3=%s, content_type=%s)",
+            filename,
+            is_mp3,
+            content_type,
+        )
+
+        try:
+            if is_mp3:
+                # Use librosa for MP3 files
+                logger.debug("Using librosa to read MP3 file")
+                audio_array, sample_rate = librosa.load(
+                    io.BytesIO(audio_content), sr=None, mono=False
+                )
+            else:
+                # Use soundfile for other formats (WAV, FLAC, OGG, etc.)
+                logger.debug("Using soundfile to read audio file")
+                audio_array, sample_rate = sf.read(io.BytesIO(audio_content))
+
+            logger.debug(
+                "Audio loaded: shape=%s, dtype=%s, sample_rate=%d",
+                audio_array.shape,
+                audio_array.dtype,
+                sample_rate,
+            )
+
+            if audio_array.size == 0:
+                raise ValueError("Audio array is empty after reading")
+
+            return audio_array, sample_rate
+        except Exception as exc:
+            logger.error(
+                "Failed to read audio file '%s': %s", filename, str(exc), exc_info=True
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Failed to read audio file: {str(exc)}",
+            ) from exc
 
     def classify_audio(
         self, *, audio_content: bytes, content_type: str, filename: str
     ) -> dict[str, Any]:
-        endpoint = self._settings.ai_inference_endpoint
-        if endpoint:
-            remote_result = self._classify_with_remote_endpoint(
-                endpoint=endpoint,
-                audio_content=audio_content,
-                content_type=content_type,
-            )
-            if remote_result is not None:
-                return remote_result
-
+        settings = get_settings()
         labels = [
             value.strip()
-            for value in self._settings.ai_default_labels.split(",")
+            for value in settings.ai_default_labels.split(",")
             if value.strip()
         ]
-        label = labels[0] if labels else "unknown"
-        return {
-            "model_name": self._settings.ai_model_name,
-            "predictions": [{"label": label, "score": 0.0}],
-            "source": "fallback",
-            "filename": filename,
-        }
 
-    def _classify_with_remote_endpoint(
-        self, *, endpoint: str, audio_content: bytes, content_type: str
-    ) -> dict[str, Any] | None:
-        headers = {"Content-Type": content_type}
-        if self._settings.ai_inference_token:
-            headers["Authorization"] = f"Bearer {self._settings.ai_inference_token}"
-
-        req = request.Request(
-            url=endpoint,
-            data=audio_content,
-            headers=headers,
-            method="POST",
+        logger.info(
+            "Classifying audio: filename=%s, content_type=%s, size=%d bytes",
+            filename,
+            content_type,
+            len(audio_content),
         )
+
         try:
-            with request.urlopen(req, timeout=30) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-            predictions = self._normalize_predictions(payload)
-            return {
-                "model_name": self._settings.ai_model_name,
-                "predictions": predictions,
-                "source": "remote",
-            }
-        except error.HTTPError as exc:
-            body = ""
-            try:
-                body = exc.read().decode("utf-8")
-            except Exception:
-                body = "<unavailable>"
-            logger.exception(
-                "Audio classification HTTP error for endpoint %s: status=%s body=%s",
-                endpoint,
-                exc.code,
-                body,
+            self._load_model()
+            audio_array, sample_rate = self._read_audio(
+                audio_content, content_type, filename
             )
-            return None
-        except (error.URLError, json.JSONDecodeError) as exc:
+
+            # Convert stereo/multi-channel to mono
+            if audio_array.ndim > 1:
+                logger.debug("Converting from %d channels to mono", audio_array.shape[1])
+                audio_array = audio_array.mean(axis=1)
+            audio_array = audio_array.astype(np.float32)
+
+            # CLAP requires 48000 Hz; resample if needed
+            target_sr = 48000
+            if sample_rate != target_sr:
+                logger.debug(
+                    "Resampling from %d Hz to %d Hz", sample_rate, target_sr
+                )
+                num_samples = int(round(len(audio_array) * target_sr / sample_rate))
+                audio_array = np.interp(
+                    np.linspace(0, len(audio_array) - 1, num_samples),
+                    np.arange(len(audio_array)),
+                    audio_array,
+                )
+                sample_rate = target_sr
+
+            logger.debug(
+                "Preprocessing complete: shape=%s, sample_rate=%d",
+                audio_array.shape,
+                sample_rate,
+            )
+
+            inputs = self._processor(
+                audio=audio_array,
+                text=labels,
+                return_tensors="pt",
+                padding=True,
+                sampling_rate=sample_rate,
+            )
+
+            logger.debug("Processing audio through CLAP model")
+            with torch.no_grad():
+                outputs = self._model(**inputs)
+                probs = outputs.logits_per_audio.softmax(dim=-1).squeeze(0).tolist()
+
+            predictions = sorted(
+                [
+                    {"label": label, "score": float(score)}
+                    for label, score in zip(labels, probs)
+                ],
+                key=lambda x: x["score"],
+                reverse=True,
+            )
+
+            logger.info("Classification successful: top label=%s, score=%.4f",
+                       predictions[0]["label"] if predictions else "N/A",
+                       predictions[0]["score"] if predictions else 0)
+
+            return {
+                "model_name": settings.ai_model_name,
+                "predictions": predictions,
+                "source": "local",
+                "filename": filename,
+            }
+
+        except HTTPException:
+            # Re-raise HTTPException (e.g., audio reading errors)
+            raise
+        except Exception as exc:
             logger.exception(
-                "Audio classification failed for endpoint %s: %s. Using fallback prediction.",
-                endpoint,
+                "Local AI classification failed for '%s': %s",
+                filename,
                 str(exc),
             )
-            return None
-
-    @staticmethod
-    def _normalize_predictions(payload: Any) -> list[dict[str, Any]]:
-        if isinstance(payload, dict) and isinstance(payload.get("predictions"), list):
-            raw_predictions = payload["predictions"]
-        elif isinstance(payload, list):
-            raw_predictions = payload
-        else:
-            return []
-
-        normalized: list[dict[str, Any]] = []
-        for item in raw_predictions:
-            if not isinstance(item, dict):
-                continue
-            label = item.get("label")
-            score = item.get("score")
-            if isinstance(label, str) and isinstance(score, (int, float)):
-                normalized.append({"label": label, "score": float(score)})
-        return normalized
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Audio classification failed: {str(exc)}",
+            ) from exc
 
 
 classification_service = ClassificationService()
